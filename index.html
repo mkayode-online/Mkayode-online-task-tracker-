@@ -19,21 +19,20 @@
         // ============================================
         // FIREBASE CONFIGURATION
         // ============================================
-        // IMPORTANT: Replace these with your own Firebase config
-        // Get this from Firebase Console > Project Settings > Your apps > Firebase SDK snippet
-        // Import the functions you need from the SDKs you need
-const firebaseConfig = {
-  apiKey: "AIzaSyD2Lj6-ML72Ok3ZhMlN2_GorYOguZzyRQY",
-  authDomain: "mkayo-tasks-tracker.firebaseapp.com",
-  databaseURL: "https://mkayo-tasks-tracker-default-rtdb.firebaseio.com",
-  projectId: "mkayo-tasks-tracker",
-  storageBucket: "mkayo-tasks-tracker.firebasestorage.app",
-  messagingSenderId: "247715284898",
-  appId: "1:247715284898:web:57b66ddd7483061b9694fb"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyD2Lj6-ML72Ok3ZhMlN2_GorYOguZzyRQY",
+            authDomain: "mkayo-tasks-tracker.firebaseapp.com",
+            databaseURL: "https://mkayo-tasks-tracker-default-rtdb.firebaseio.com",
+            projectId: "mkayo-tasks-tracker",
+            storageBucket: "mkayo-tasks-tracker.firebasestorage.app",
+            messagingSenderId: "247715284898",
+            appId: "1:247715284898:web:57b66ddd7483061b9694fb"
+        };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
 
         // Admin email - CHANGE THIS TO YOUR EMAIL
         const ADMIN_EMAIL = "mkayodeonline@gmail.com";
@@ -43,7 +42,7 @@ const app = initializeApp(firebaseConfig);
         // ============================================
         let currentUser = null;
         let isAdmin = false;
-        let currentView = 'login'; // login, register, tasks, admin
+        let currentView = 'login';
 
         // ============================================
         // ICONS (SVG)
@@ -93,7 +92,6 @@ const app = initializeApp(firebaseConfig);
                 const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                 await userCredential.user.updateProfile({ displayName: name });
                 
-                // Create user profile in database
                 await database.ref('users/' + userCredential.user.uid).set({
                     name: name,
                     email: email,
@@ -133,13 +131,11 @@ const app = initializeApp(firebaseConfig);
             }
         }
 
-        // Listen for auth state changes
         auth.onAuthStateChanged(async (user) => {
             if (user) {
                 currentUser = user;
                 isAdmin = user.email === ADMIN_EMAIL;
                 
-                // Update last active
                 await database.ref('users/' + user.uid + '/lastActive').set(Date.now());
                 
                 if (currentView === 'login' || currentView === 'register') {
@@ -309,7 +305,6 @@ const app = initializeApp(firebaseConfig);
                         </div>
                         
                         <div id="admin-stats" class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                            <!-- Stats will be loaded here -->
                         </div>
                         
                         <div id="admin-users" class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-6">
@@ -323,9 +318,6 @@ const app = initializeApp(firebaseConfig);
             `;
         }
 
-        // ============================================
-        // EVENT HANDLERS
-        // ============================================
         function handleLoginSubmit() {
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
@@ -362,16 +354,12 @@ const app = initializeApp(firebaseConfig);
             render();
         }
 
-        // ============================================
-        // TASKS PAGE LOGIC
-        // ============================================
         async function initializeTasksPage() {
             if (!currentUser) return;
             
             const darkMode = localStorage.getItem('darkMode') === 'true';
             const tasksContent = document.getElementById('tasks-content');
             
-            // Listen for user's tasks
             const tasksRef = database.ref('tasks/' + currentUser.uid);
             tasksRef.on('value', (snapshot) => {
                 const tasks = snapshot.val() || {};
@@ -402,7 +390,6 @@ const app = initializeApp(firebaseConfig);
             
             const filteredTasks = tasksArray.filter(t => t.month === selectedMonth && t.year === selectedYear);
             
-            // Calculate stats
             const completed = filteredTasks.filter(t => t.completed).length;
             const total = filteredTasks.length;
             const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -481,9 +468,6 @@ const app = initializeApp(firebaseConfig);
             }
         }
 
-        // ============================================
-        // ADMIN PANEL LOGIC
-        // ============================================
         async function loadAdminData() {
             const usersSnapshot = await database.ref('users').once('value');
             const users = usersSnapshot.val() || {};
@@ -513,7 +497,6 @@ const app = initializeApp(firebaseConfig);
                 });
             });
             
-            // Render stats
             document.getElementById('admin-stats').innerHTML = `
                 <div class="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl shadow-lg text-white">
                     <div class="flex items-center justify-between mb-4">
@@ -548,7 +531,6 @@ const app = initializeApp(firebaseConfig);
                 </div>
             `;
             
-            // Render users list
             document.getElementById('users-list').innerHTML = usersList.map(user => {
                 const lastActive = user.lastActive ? new Date(user.lastActive).toLocaleString() : 'Never';
                 return `
@@ -571,9 +553,7 @@ const app = initializeApp(firebaseConfig);
             }).join('');
         }
 
-        // ============================================
-        // INITIALIZE APP
-        // ============================================
+        // Initialize app
         render();
     </script>
 </body>
