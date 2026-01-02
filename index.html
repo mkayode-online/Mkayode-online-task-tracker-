@@ -1,38 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Mkayode CRM Task Tracker</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MKayode CRM</title>
 
-<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Firebase v9 -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  updateProfile 
-} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-import { 
-  getDatabase, 
-  ref, 
-  set, 
-  push, 
-  onValue, 
-  remove, 
-  update, 
-  get 
-} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+<!-- Firebase (compat for browser use) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
 
-/* =========================
-   FIREBASE CONFIG
-========================= */
+<body class="min-h-screen bg-gray-100">
+<div id="root"></div>
+
+<script>
+/* ===============================
+   🔥 FIREBASE CONFIG
+   =============================== */
 const firebaseConfig = {
   apiKey: "AIzaSyD2Lj6-ML72Ok3ZhMlN2_GorYOguZzyRQY",
   authDomain: "mkayo-tasks-tracker.firebaseapp.com",
@@ -43,188 +30,203 @@ const firebaseConfig = {
   appId: "1:247715284898:web:57b66ddd7483061b9694fb"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const database = firebase.database();
 
-/* =========================
-   GLOBAL STATE
-========================= */
+/* ===============================
+   👑 ADMIN
+   =============================== */
 const ADMIN_EMAIL = "mkayodeonline@gmail.com";
+
+/* ===============================
+   🌍 GLOBAL STATE
+   =============================== */
 let currentUser = null;
 let isAdmin = false;
-let currentView = "login";
+let view = "login";
 
 const MONTHS = [
- 'January','February','March','April','May','June',
- 'July','August','September','October','November','December'
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
 ];
 
-/* =========================
-   RENDER ENGINE
-========================= */
-const root = document.getElementById("root");
-
-function render(){
-  if(currentView==="login") root.innerHTML = loginView();
-  if(currentView==="register") root.innerHTML = registerView();
-  if(currentView==="tasks") renderTasks();
-  if(currentView==="admin" && isAdmin) renderAdmin();
+/* ===============================
+   🔔 UTIL
+   =============================== */
+function notify(msg){
+  alert(msg);
 }
 
-/* =========================
-   AUTH
-========================= */
-window.login = async ()=>{
-  const email = emailInput.value;
-  const password = passwordInput.value;
-  await signInWithEmailAndPassword(auth,email,password);
-};
+/* ===============================
+   🔐 AUTH HANDLERS
+   =============================== */
+function login(){
+  const e = email.value;
+  const p = password.value;
+  auth.signInWithEmailAndPassword(e,p).catch(err=>notify(err.message));
+}
 
-window.register = async ()=>{
-  const name = nameInput.value;
-  const email = emailInput.value;
-  const password = passwordInput.value;
-  const res = await createUserWithEmailAndPassword(auth,email,password);
-  await updateProfile(res.user,{displayName:name});
-  await set(ref(db,"users/"+res.user.uid),{
-    name,email,createdAt:Date.now(),lastActive:Date.now()
-  });
-};
+function registerUser(){
+  const n = name.value;
+  const e = email.value;
+  const p = password.value;
 
-window.logout = async ()=>{
-  await signOut(auth);
-};
+  auth.createUserWithEmailAndPassword(e,p).then(res=>{
+    res.user.updateProfile({displayName:n});
+    database.ref("users/"+res.user.uid).set({
+      name:n,
+      email:e,
+      createdAt:Date.now()
+    });
+  }).catch(err=>notify(err.message));
+}
 
-onAuthStateChanged(auth, user=>{
+function logout(){
+  auth.signOut();
+}
+
+/* ===============================
+   🔄 AUTH STATE
+   =============================== */
+auth.onAuthStateChanged(user=>{
   if(user){
     currentUser = user;
     isAdmin = user.email === ADMIN_EMAIL;
-    update(ref(db,"users/"+user.uid),{lastActive:Date.now()});
-    currentView="tasks";
-  } else {
-    currentUser=null;
-    isAdmin=false;
-    currentView="login";
+    view = "dashboard";
+  }else{
+    currentUser = null;
+    isAdmin = false;
+    view = "login";
   }
   render();
 });
 
-/* =========================
-   VIEWS
-========================= */
-function loginView(){
-return `
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-purple-100">
-  <div class="bg-white p-8 rounded-xl shadow max-w-md w-full">
-    <h1 class="text-2xl font-bold mb-4">Login</h1>
-    <input id="emailInput" class="w-full mb-3 p-3 border rounded" placeholder="Email">
-    <input id="passwordInput" type="password" class="w-full mb-4 p-3 border rounded" placeholder="Password">
-    <button onclick="login()" class="w-full bg-indigo-600 text-white py-3 rounded">Login</button>
-    <p class="text-center mt-4">
-      <button onclick="currentView='register';render()" class="text-indigo-600">Create account</button>
-    </p>
-  </div>
-</div>`;
+/* ===============================
+   🖥️ RENDER
+   =============================== */
+function render(){
+  if(view==="login") return renderLogin();
+  if(view==="register") return renderRegister();
+  if(view==="dashboard") return isAdmin ? renderAdmin() : renderDashboard();
 }
 
-function registerView(){
-return `
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-purple-100">
-  <div class="bg-white p-8 rounded-xl shadow max-w-md w-full">
-    <h1 class="text-2xl font-bold mb-4">Register</h1>
-    <input id="nameInput" class="w-full mb-3 p-3 border rounded" placeholder="Full name">
-    <input id="emailInput" class="w-full mb-3 p-3 border rounded" placeholder="Email">
-    <input id="passwordInput" type="password" class="w-full mb-4 p-3 border rounded" placeholder="Password">
-    <button onclick="register()" class="w-full bg-indigo-600 text-white py-3 rounded">Register</button>
-    <p class="text-center mt-4">
-      <button onclick="currentView='login';render()" class="text-indigo-600">Back to login</button>
-    </p>
-  </div>
-</div>`;
-}
-
-/* =========================
-   TASK DASHBOARD
-========================= */
-function renderTasks(){
-root.innerHTML = `
-<div class="min-h-screen bg-gray-100 p-6">
-  <div class="flex justify-between mb-6">
-    <h1 class="text-3xl font-bold">Task Dashboard</h1>
-    <div class="flex gap-3">
-      ${isAdmin?`<button onclick="currentView='admin';render()" class="px-4 py-2 bg-purple-600 text-white rounded">Admin</button>`:""}
-      <button onclick="logout()" class="px-4 py-2 bg-red-600 text-white rounded">Logout</button>
+/* ===============================
+   🔑 LOGIN
+   =============================== */
+function renderLogin(){
+  root.innerHTML = `
+  <div class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded shadow w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-6">Login</h2>
+      <input id="email" class="w-full mb-3 p-2 border rounded" placeholder="Email">
+      <input id="password" type="password" class="w-full mb-4 p-2 border rounded" placeholder="Password">
+      <button onclick="login()" class="w-full bg-blue-600 text-white p-2 rounded">Login</button>
+      <p class="mt-4 text-sm">No account?
+        <button onclick="view='register';render()" class="text-blue-600">Register</button>
+      </p>
     </div>
-  </div>
-
-  <button onclick="addTask()" class="mb-4 px-4 py-3 bg-indigo-600 text-white rounded">Add Task</button>
-  <div id="taskList"></div>
-</div>`;
-
-const month = new Date().getMonth()+1;
-const year = new Date().getFullYear();
-
-onValue(ref(db,"tasks/"+currentUser.uid),(snap)=>{
-  const tasks = snap.val()||{};
-  document.getElementById("taskList").innerHTML =
-    Object.entries(tasks).map(([id,t])=>`
-      <div class="bg-white p-4 rounded shadow mb-3 flex justify-between">
-        <div>
-          <div class="font-semibold">${t.title}</div>
-          <div class="text-sm text-gray-500">Week ${t.week} • ${t.category}</div>
-        </div>
-        <button onclick="deleteTask('${id}')" class="text-red-600">Delete</button>
-      </div>
-    `).join("");
-});
+  </div>`;
 }
 
-window.addTask = async ()=>{
+/* ===============================
+   📝 REGISTER
+   =============================== */
+function renderRegister(){
+  root.innerHTML = `
+  <div class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded shadow w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-6">Register</h2>
+      <input id="name" class="w-full mb-3 p-2 border rounded" placeholder="Full name">
+      <input id="email" class="w-full mb-3 p-2 border rounded" placeholder="Email">
+      <input id="password" type="password" class="w-full mb-4 p-2 border rounded" placeholder="Password">
+      <button onclick="registerUser()" class="w-full bg-green-600 text-white p-2 rounded">Create Account</button>
+      <p class="mt-4 text-sm">
+        <button onclick="view='login';render()" class="text-blue-600">Back to login</button>
+      </p>
+    </div>
+  </div>`;
+}
+
+/* ===============================
+   👤 USER DASHBOARD
+   =============================== */
+function renderDashboard(){
+  root.innerHTML = `
+  <div class="p-6 max-w-5xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold">My Tasks</h1>
+      <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded">Logout</button>
+    </div>
+
+    <button onclick="addTask()" class="mb-4 bg-blue-600 text-white px-4 py-2 rounded">
+      + Add Task
+    </button>
+
+    <div id="tasks"></div>
+  </div>`;
+  loadTasks();
+}
+
+/* ===============================
+   👑 ADMIN DASHBOARD
+   =============================== */
+function renderAdmin(){
+  root.innerHTML = `
+  <div class="p-6 max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold">Admin Dashboard</h1>
+      <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded">Logout</button>
+    </div>
+    <div id="adminUsers" class="bg-white p-6 rounded shadow"></div>
+  </div>`;
+  loadUsers();
+}
+
+/* ===============================
+   📋 TASKS
+   =============================== */
+function addTask(){
   const title = prompt("Task title");
   if(!title) return;
-  await push(ref(db,"tasks/"+currentUser.uid),{
+  database.ref("tasks/"+currentUser.uid).push({
     title,
-    week:1,
-    category:"Work",
-    month:new Date().getMonth()+1,
-    year:new Date().getFullYear(),
     completed:false,
     createdAt:Date.now()
   });
-};
-
-window.deleteTask = async (id)=>{
-  await remove(ref(db,"tasks/"+currentUser.uid+"/"+id));
-};
-
-/* =========================
-   ADMIN DASHBOARD
-========================= */
-async function renderAdmin(){
-const usersSnap = await get(ref(db,"users"));
-const users = usersSnap.val()||{};
-root.innerHTML = `
-<div class="min-h-screen bg-gray-900 text-white p-6">
-  <div class="flex justify-between mb-6">
-    <h1 class="text-3xl font-bold">Admin Dashboard</h1>
-    <button onclick="currentView='tasks';render()" class="bg-indigo-600 px-4 py-2 rounded">Back</button>
-  </div>
-  ${Object.values(users).map(u=>`
-    <div class="bg-gray-800 p-4 rounded mb-3">
-      <div class="font-semibold">${u.name}</div>
-      <div class="text-sm text-gray-400">${u.email}</div>
-    </div>
-  `).join("")}
-</div>`;
 }
 
-/* INIT */
-render();
+function loadTasks(){
+  database.ref("tasks/"+currentUser.uid).on("value",snap=>{
+    const data = snap.val()||{};
+    tasks.innerHTML = Object.entries(data).map(([id,t])=>`
+      <div class="bg-white p-3 mb-2 rounded shadow flex justify-between">
+        <span>${t.title}</span>
+        <button onclick="database.ref('tasks/${currentUser.uid}/${id}').remove()" class="text-red-600">Delete</button>
+      </div>
+    `).join("");
+  });
+}
 
+/* ===============================
+   👥 ADMIN USERS
+   =============================== */
+function loadUsers(){
+  database.ref("users").once("value").then(snap=>{
+    const users = snap.val()||{};
+    adminUsers.innerHTML = `
+      <h2 class="text-xl font-bold mb-4">Registered Users</h2>
+      ${Object.values(users).map(u=>`
+        <div class="border-b py-2">
+          <strong>${u.name}</strong><br>
+          <span class="text-sm text-gray-600">${u.email}</span>
+        </div>
+      `).join("")}
+    `;
+  });
+}
+
+render();
 </script>
-</head>
-<body>
-<div id="root"></div>
 </body>
 </html>
