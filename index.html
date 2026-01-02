@@ -3,24 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MKayode Online Task Tracker</title>
+<title>MKayode CRM Tracker</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-
-<style>
-body { margin:0; padding:0 }
-</style>
 </head>
 
-<body>
+<body class="bg-gray-100">
 <div id="root"></div>
 
 <script>
-/* ================= FIREBASE CONFIG ================= */
+/* ================= CONFIG ================= */
 const firebaseConfig = {
   apiKey: "AIzaSyD2Lj6-ML72Ok3ZhMlN2_GorYOguZzyRQY",
   authDomain: "mkayo-tasks-tracker.firebaseapp.com",
@@ -33,72 +29,48 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const database = firebase.database();
+const db = firebase.database();
 
-/* ================= GLOBAL STATE ================= */
+const ADMIN_EMAIL = "mkayodeonline@gmail.com";
+
+/* ================= STATE ================= */
 let currentUser = null;
-let currentView = "login";
+let isAdmin = false;
+let view = "login";
 
-/* ================= UTIL ================= */
-function showMessage(msg, type="info") {
-  const colors = {
-    error:"bg-red-500",
-    success:"bg-green-500",
-    info:"bg-blue-500"
-  };
-  const el = document.createElement("div");
-  el.className = `fixed top-4 right-4 ${colors[type]} text-white px-5 py-3 rounded shadow z-50`;
-  el.innerText = msg;
-  document.body.appendChild(el);
-  setTimeout(()=>el.remove(),3000);
+/* ================= HELPERS ================= */
+function render() {
+  const root = document.getElementById("root");
+  if(view==="login") root.innerHTML = loginView();
+  if(view==="register") root.innerHTML = registerView();
+  if(view==="user") root.innerHTML = userDashboard();
+  if(view==="admin") root.innerHTML = adminDashboard();
+  if(view==="adminTasks") root.innerHTML = adminTasksDashboard();
+}
+
+function logout() {
+  auth.signOut();
 }
 
 /* ================= AUTH ================= */
-async function handleLogin() {
-  const email = document.getElementById("login-email").value;
-  const password = document.getElementById("login-password").value;
-  if(!email || !password) return showMessage("Fill all fields","error");
-  await auth.signInWithEmailAndPassword(email,password);
-}
-
-async function handleRegister() {
-  const name = document.getElementById("register-name").value;
-  const email = document.getElementById("register-email").value;
-  const password = document.getElementById("register-password").value;
-  if(!name || !email || !password) return showMessage("Fill all fields","error");
-  const cred = await auth.createUserWithEmailAndPassword(email,password);
-  await cred.user.updateProfile({displayName:name});
-  await database.ref("users/"+cred.user.uid).set({
-    name,email,createdAt:Date.now()
-  });
-}
-
-async function handleLogout() {
-  await auth.signOut();
-}
-
-/* ================= RENDER ================= */
-function render() {
-  const root = document.getElementById("root");
-  if(currentView==="login") root.innerHTML = loginView();
-  if(currentView==="register") root.innerHTML = registerView();
-  if(currentView==="tasks") {
-    root.innerHTML = tasksView();
-    loadTasks();
-  }
-}
+auth.onAuthStateChanged(user=>{
+  currentUser = user;
+  isAdmin = user && user.email === ADMIN_EMAIL;
+  view = user ? (isAdmin ? "admin" : "user") : "login";
+  render();
+});
 
 /* ================= VIEWS ================= */
 function loginView() {
 return `
-<div class="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+<div class="min-h-screen flex items-center justify-center">
 <div class="bg-white p-8 rounded-xl shadow w-full max-w-md">
-<h1 class="text-2xl font-bold mb-4 text-center">Login</h1>
-<input id="login-email" class="w-full border p-3 mb-3 rounded" placeholder="Email">
-<input id="login-password" type="password" class="w-full border p-3 mb-4 rounded" placeholder="Password">
-<button onclick="handleLogin()" class="w-full bg-indigo-600 text-white p-3 rounded">Login</button>
+<h2 class="text-2xl font-bold mb-4 text-center">Login</h2>
+<input id="email" class="w-full border p-3 mb-3 rounded" placeholder="Email">
+<input id="password" type="password" class="w-full border p-3 mb-4 rounded" placeholder="Password">
+<button onclick="auth.signInWithEmailAndPassword(email.value,password.value)" class="w-full bg-indigo-600 text-white p-3 rounded">Login</button>
 <p class="text-center mt-4">
-<button onclick="currentView='register';render()" class="text-indigo-600">Create account</button>
+<button onclick="view='register';render()" class="text-indigo-600">Create account</button>
 </p>
 </div>
 </div>`;
@@ -106,105 +78,122 @@ return `
 
 function registerView() {
 return `
-<div class="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+<div class="min-h-screen flex items-center justify-center">
 <div class="bg-white p-8 rounded-xl shadow w-full max-w-md">
-<h1 class="text-2xl font-bold mb-4 text-center">Register</h1>
-<input id="register-name" class="w-full border p-3 mb-3 rounded" placeholder="Full name">
-<input id="register-email" class="w-full border p-3 mb-3 rounded" placeholder="Email">
-<input id="register-password" type="password" class="w-full border p-3 mb-4 rounded" placeholder="Password">
-<button onclick="handleRegister()" class="w-full bg-indigo-600 text-white p-3 rounded">Register</button>
-<p class="text-center mt-4">
-<button onclick="currentView='login';render()" class="text-indigo-600">Back to login</button>
-</p>
+<h2 class="text-2xl font-bold mb-4 text-center">Register</h2>
+<input id="name" class="w-full border p-3 mb-3 rounded" placeholder="Full name">
+<input id="email" class="w-full border p-3 mb-3 rounded" placeholder="Email">
+<input id="password" type="password" class="w-full border p-3 mb-4 rounded" placeholder="Password">
+<button onclick="register()" class="w-full bg-indigo-600 text-white p-3 rounded">Register</button>
 </div>
 </div>`;
 }
 
-function tasksView() {
+function userDashboard() {
 return `
-<div class="min-h-screen bg-gray-50 p-6">
-<div class="max-w-4xl mx-auto">
+<div class="p-6 max-w-4xl mx-auto">
 <div class="flex justify-between items-center mb-6">
-<h1 class="text-3xl font-bold">Task Tracker</h1>
-<button onclick="handleLogout()" class="bg-red-600 text-white px-4 py-2 rounded">Logout</button>
+<h1 class="text-3xl font-bold">User Dashboard</h1>
+<button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded">Logout</button>
 </div>
-
-<div class="mb-4 flex gap-2">
-<select id="monthSelect" class="border p-2 rounded">
-${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-.map((m,i)=>`<option value="${i+1}">${m}</option>`).join("")}
-</select>
-
-<select id="yearSelect" class="border p-2 rounded">
-${[2024,2025,2026,2027].map(y=>`<option>${y}</option>`).join("")}
-</select>
-
-<button onclick="addTask()" class="bg-indigo-600 text-white px-4 py-2 rounded">Add Task</button>
-</div>
-
-<div id="tasks-list" class="space-y-3"></div>
-</div>
+<button onclick="addTask()" class="bg-indigo-600 text-white px-4 py-2 rounded mb-4">Add Task</button>
+<div id="userTasks"></div>
 </div>`;
 }
 
-/* ================= TASKS ================= */
-function loadTasks() {
-const month = Number(document.getElementById("monthSelect").value || new Date().getMonth()+1);
-const year = Number(document.getElementById("yearSelect").value || new Date().getFullYear());
+function adminDashboard() {
+return `
+<div class="p-6 max-w-6xl mx-auto">
+<div class="flex justify-between items-center mb-6">
+<h1 class="text-3xl font-bold">Admin Dashboard</h1>
+<button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded">Logout</button>
+</div>
 
-database.ref("tasks/"+currentUser.uid).on("value",snap=>{
-const data = snap.val() || {};
-const list = Object.entries(data)
-.map(([id,t])=>({...t,id}))
-.filter(t=>t.month===month && t.year===year);
+<div class="grid grid-cols-3 gap-4 mb-6">
+<div class="bg-white p-4 rounded shadow">Users: <span id="userCount">0</span></div>
+<div class="bg-white p-4 rounded shadow">Tasks: <span id="taskCount">0</span></div>
+<div class="bg-white p-4 rounded shadow">Completed: <span id="doneCount">0</span></div>
+</div>
 
-const box = document.getElementById("tasks-list");
-if(!list.length){
-box.innerHTML = `<p class="text-gray-500">No tasks yet</p>`;
-return;
+<button onclick="view='adminTasks';render()" class="bg-indigo-600 text-white px-4 py-2 rounded">
+View All Tasks
+</button>
+</div>`;
 }
 
-box.innerHTML = list.map(t=>`
-<div class="bg-white p-4 rounded shadow flex justify-between items-center">
-<div>
-<p class="${t.completed?'line-through text-gray-400':''} font-medium">${t.title}</p>
-<p class="text-sm text-gray-500">Week ${t.week}</p>
+function adminTasksDashboard() {
+return `
+<div class="p-6 max-w-6xl mx-auto">
+<div class="flex justify-between items-center mb-6">
+<h1 class="text-3xl font-bold">Admin Task Board</h1>
+<button onclick="view='admin';render()" class="bg-gray-600 text-white px-4 py-2 rounded">Back</button>
 </div>
-<div class="flex gap-2">
-<input type="checkbox" ${t.completed?"checked":""} onchange="toggleTask('${t.id}',${!t.completed})">
-<button onclick="deleteTask('${t.id}')" class="text-red-600">Delete</button>
-</div>
-</div>`).join("");
-});
+<div id="allTasks"></div>
+</div>`;
+}
+
+/* ================= LOGIC ================= */
+function register() {
+  auth.createUserWithEmailAndPassword(email.value,password.value)
+  .then(res=>{
+    db.ref("users/"+res.user.uid).set({name:name.value,email:email.value});
+  });
 }
 
 function addTask() {
-const title = prompt("Task title");
-if(!title) return;
-const week = Number(prompt("Week 1-4")||1);
-const month = Number(document.getElementById("monthSelect").value);
-const year = Number(document.getElementById("yearSelect").value);
+  const title = prompt("Task title");
+  if(!title) return;
+  db.ref("tasks/"+currentUser.uid).push({
+    title,completed:false,createdAt:Date.now()
+  });
+}
 
-database.ref("tasks/"+currentUser.uid).push({
-title,week,month,year,completed:false,createdAt:Date.now()
+db.ref("tasks").on("value",snap=>{
+  if(!snap.exists()) return;
+  const tasks = snap.val();
+  let total = 0, done = 0;
+
+  Object.values(tasks).forEach(u=>{
+    Object.values(u).forEach(t=>{
+      total++;
+      if(t.completed) done++;
+    });
+  });
+
+  document.getElementById("taskCount")?.innerText = total;
+  document.getElementById("doneCount")?.innerText = done;
 });
-}
 
-function toggleTask(id,val){
-database.ref(`tasks/${currentUser.uid}/${id}/completed`).set(val);
-}
+db.ref("users").on("value",snap=>{
+  document.getElementById("userCount")?.innerText = snap.numChildren();
+});
 
-function deleteTask(id){
-if(confirm("Delete task?")){
-database.ref(`tasks/${currentUser.uid}/${id}`).remove();
-}
-}
+db.ref("tasks/"+(currentUser?.uid||"")).on("value",snap=>{
+  if(!snap.exists()) return;
+  const box = document.getElementById("userTasks");
+  if(!box) return;
+  box.innerHTML = Object.entries(snap.val()).map(([id,t])=>`
+    <div class="bg-white p-3 rounded shadow mb-2 flex justify-between">
+      <span>${t.title}</span>
+      <input type="checkbox" ${t.completed?"checked":""}
+      onchange="db.ref('tasks/${currentUser.uid}/${id}/completed').set(this.checked)">
+    </div>
+  `).join("");
+});
 
-/* ================= AUTH STATE ================= */
-auth.onAuthStateChanged(user=>{
-currentUser = user;
-currentView = user ? "tasks" : "login";
-render();
+db.ref("tasks").on("value",snap=>{
+  const box = document.getElementById("allTasks");
+  if(!box || !snap.exists()) return;
+
+  const data = snap.val();
+  box.innerHTML = Object.entries(data).map(([uid,tasks])=>`
+    <div class="mb-4">
+      <h3 class="font-bold mb-2">User: ${uid}</h3>
+      ${Object.values(tasks).map(t=>`
+        <div class="bg-white p-2 rounded shadow mb-1">${t.title}</div>
+      `).join("")}
+    </div>
+  `).join("");
 });
 
 render();
